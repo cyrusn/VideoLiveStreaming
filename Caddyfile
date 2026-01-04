@@ -1,8 +1,0 @@
-:4096 {
-	root * /Users/cyrusngan/Desktop/VLS/hls
-	file_server
-	header {
-		Cache-Control no-cache
-		Access-Control-Allow-Origin *
-	}
-}
