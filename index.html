@@ -8,15 +8,116 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css"
     />
+
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   </head>
   <body>
     <div class="container py-2">
-      <h1 class="title has-text-centered">S.K.H. Li Ping Secondary School</h1>
-      <h2 class="subtitle has-text-centered">Live Streaming System</h2>
-      <video controls autoplay playsinline>
-        <source src="/hls/stream.m3u8" type="application/vnd.apple.mpegurl" />
-        Your browser does not support HLS.
-      </video>
+      <div class="columns is-centered" style="height: 100vh">
+        <div class="column">
+          <h1 class="title has-text-centered">
+            S.K.H. Li Ping Secondary School
+          </h1>
+          <div id="waiting" class="notification is-warning is-light is-2">
+            <p><strong>Please wait…! </strong> Streaming is about to start</p>
+          </div>
+          <video id="video" controls autoplay playsinline muted playsinline>
+            <source
+              src="/hls/stream.m3u8"
+              type="application/vnd.apple.mpegurl"
+            />
+            Your browser does not support HLS.
+          </video>
+        </div>
+      </div>
     </div>
   </body>
+
+  <script>
+    const video = document.getElementById('video')
+    const waiting = document.getElementById('waiting')
+    const STREAM_URL = '/hls/stream.m3u8'
+
+    let hls
+    let retryTimer = null
+
+    function showWaiting() {
+      waiting.style.display = 'flex'
+      video.style.display = 'none'
+    }
+
+    function showVideo() {
+      waiting.style.display = 'none'
+      video.style.display = 'block'
+    }
+
+    function startPlayer() {
+      showWaiting()
+
+      if (hls) {
+        hls.destroy()
+        hls = null
+      }
+
+      video.muted = true
+      video.autoplay = true
+
+      if (Hls.isSupported()) {
+        hls = new Hls({
+          lowLatencyMode: true,
+          backBufferLength: 30,
+          maxLiveSyncPlaybackRate: 1.5
+        })
+
+        hls.loadSource(STREAM_URL)
+        hls.attachMedia(video)
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          video.play().catch(() => {})
+        })
+
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            retry()
+          }
+        })
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = STREAM_URL
+        video.addEventListener(
+          'loadedmetadata',
+          () => {
+            video.play().catch(() => {})
+          },
+          { once: true }
+        )
+      }
+    }
+
+    function retry() {
+      showWaiting()
+      if (retryTimer) return
+
+      retryTimer = setTimeout(() => {
+        retryTimer = null
+        startPlayer()
+      }, 3000)
+    }
+
+    /* ✅ Only show video once it is actually playing */
+    video.addEventListener('playing', showVideo)
+
+    /* ✅ If playback stalls, hide video again */
+    video.addEventListener('waiting', showWaiting)
+    video.addEventListener('stalled', showWaiting)
+    video.addEventListener('error', showWaiting)
+
+    /* Safety: stream not ready at load */
+    setTimeout(() => {
+      if (video.readyState < 2) {
+        retry()
+      }
+    }, 5000)
+
+    startPlayer()
+  </script>
 </html>
