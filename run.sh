@@ -12,7 +12,7 @@ STATUS_INTERVAL=5           # seconds between status prints
 
 
 RTMP_PORT=1935
-HTTP_PORT=8080
+HTTP_PORT=2510
 
 # =========================================================
 # PATHS
@@ -52,8 +52,13 @@ fi
 cleanup() {
     echo ""
     echo "⏹ Stopping server..."
-    pkill -P $$ 2>/dev/null || true
-    wait 2>/dev/null || true
+    if [ -n "$CADDY_PID" ]; then
+        kill "$CADDY_PID" 2>/dev/null || true
+    fi
+    if [ -n "$FFMPEG_PID" ]; then
+        pkill -P "$FFMPEG_PID" 2>/dev/null || true
+        kill "$FFMPEG_PID" 2>/dev/null || true
+    fi
     exit 0
 }
 
@@ -104,6 +109,8 @@ while true; do
     sleep 2
 done &
 
+FFMPEG_PID=$!
+
 # =========================================================
 # WAIT FOR RTMP PORT (OBS CONNECT FIX)
 # =========================================================
@@ -121,7 +128,7 @@ echo "▶ Starting Caddy..."
 
 (
     cd "$BASE_DIR"
-    caddy run --adapter caddyfile --config - <<EOF
+    exec caddy run --adapter caddyfile --config - <<EOF
 :${HTTP_PORT} {
     root * .
     file_server
