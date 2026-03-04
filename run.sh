@@ -19,9 +19,11 @@ HTTP_PORT=2510
 # =========================================================
 
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
-HLS_DIR="$BASE_DIR/hls"
+PUBLIC_DIR="$BASE_DIR/public"
+HLS_DIR="$PUBLIC_DIR/hls"
 REC_DIR="$BASE_DIR/recordings"
 
+# Ensure directories exist
 mkdir -p "$HLS_DIR" "$REC_DIR"
 
 # Validate STATUS_INTERVAL
@@ -38,6 +40,7 @@ RECORD_FILE="$REC_DIR/stream_$TIMESTAMP.mp4"
 # =========================================================
 
 echo "🧹 Clearing old HLS segments..."
+# Only clear on initial startup to avoid 404s during brief disconnects
 rm -f "$HLS_DIR"/*.ts "$HLS_DIR"/*.m3u8 2>/dev/null || true
 
 if [[ "$RECORD_ENABLED" == true ]]; then
@@ -73,8 +76,8 @@ echo "▶ Starting FFmpeg (waiting for OBS)..."
 while true; do
     echo "⏳ Waiting for OBS connection..."
 
-    # Clean HLS on each new session
-    rm -f "$HLS_DIR"/*.ts "$HLS_DIR"/*.m3u8 2>/dev/null || true
+    # NOTE: We do NOT clean HLS folder here to avoid "empty folder" issues 
+    # while waiting for the next connection. Old files remain until overwritten.
 
     FFMPEG_CMD=(
         ffmpeg -y -loglevel warning
@@ -86,7 +89,7 @@ while true; do
         -c:a aac
         -f hls
         -hls_time 2
-        -hls_list_size 3
+        -hls_list_size 10
         -hls_flags delete_segments+append_list+temp_file
         "$HLS_DIR/stream.m3u8"
     )
@@ -130,7 +133,7 @@ echo "▶ Starting Caddy..."
     cd "$BASE_DIR"
     exec caddy run --adapter caddyfile --config - <<EOF
 :${HTTP_PORT} {
-    root * .
+    root * public
     file_server
     log {
         level ERROR
@@ -149,7 +152,7 @@ echo ""
 echo "✅ Server running"
 echo "OBS Server : rtmp://localhost:${RTMP_PORT}/live"
 echo "OBS Key    : stream"
-echo "Live URL   : http://localhost:${HTTP_PORT}/hls/stream.m3u8"
+echo "Live URL   : http://localhost:${HTTP_PORT}/"
 
 if [[ "$RECORD_ENABLED" == true ]]; then
     echo "Recording : $RECORD_FILE"
