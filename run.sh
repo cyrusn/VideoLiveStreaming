@@ -146,7 +146,7 @@ echo "▶ Starting Caddy..."
     tls internal
     root * .
     file_server {
-        index workflow.html
+        index redirect.html
     }
 }
 EOF
