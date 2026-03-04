@@ -22,29 +22,119 @@
             max-height: 100%;
             outline: none;
         }
+        #status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.5);
+            padding: 5px;
+            border-radius: 5px;
+            font-family: sans-serif;
+            display: none;
+            z-index: 100;
+        }
     </style>
 </head>
 <body>
+    <div id="status">Connecting...</div>
     <video id="video" controls autoplay playsinline muted></video>
 
     <script>
         const video = document.getElementById('video');
+        const status = document.getElementById('status');
         const streamUrl = '/hls/stream.m3u8';
+        let hls;
+        let retryTimer;
+        let lastTime = 0;
+        let stallCount = 0;
 
-        if (Hls.isSupported()) {
-            const hls = new Hls();
-            hls.loadSource(streamUrl);
-            hls.attachMedia(video);
-            hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                video.play().catch(e => console.log("Autoplay blocked/failed", e));
-            });
+        function showStatus(msg) {
+            status.textContent = msg;
+            status.style.display = 'block';
+            setTimeout(() => { status.style.display = 'none'; }, 5000);
         }
-        else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = streamUrl;
-            video.addEventListener('loadedmetadata', function() {
-                video.play().catch(e => console.log("Autoplay blocked/failed", e));
-            });
+
+        function initPlayer() {
+            if (Hls.isSupported()) {
+                if (hls) {
+                    hls.destroy();
+                }
+
+                hls = new Hls({
+                    manifestLoadingTimeOut: 5000,
+                    manifestLoadingMaxRetry: 10,
+                    levelLoadingTimeOut: 5000,
+                    levelLoadingMaxRetry: 10,
+                    fragLoadingTimeOut: 5000,
+                    fragLoadingMaxRetry: 10
+                });
+
+                hls.loadSource(streamUrl);
+                hls.attachMedia(video);
+
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    video.play().catch(e => console.log("Autoplay blocked/failed", e));
+                    showStatus("Live");
+                });
+
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.log("Network error, trying to recover...");
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.log("Media error, trying to recover...");
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                console.log("Fatal error, restarting player...");
+                                hls.destroy();
+                                setTimeout(initPlayer, 3000);
+                                break;
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Native HLS (Safari/iOS)
+                video.src = streamUrl;
+                video.addEventListener('loadedmetadata', function() {
+                    video.play().catch(e => console.log("Autoplay blocked/failed", e));
+                    showStatus("Live");
+                });
+                
+                video.addEventListener('error', function() {
+                    console.log("Native video error, retrying...");
+                    setTimeout(() => {
+                        video.src = streamUrl;
+                        video.load();
+                    }, 3000);
+                });
+            }
         }
+
+        // Watchdog to detect stalls or frozen stream (e.g. OBS restart)
+        setInterval(() => {
+            if (video.paused) return; // Don't check if user paused
+
+            if (video.currentTime === lastTime) {
+                stallCount++;
+                if (stallCount > 10) { // Stalled for 5+ seconds (check runs every 500ms? No, set to 1s below)
+                    console.log("Stream stalled, attempting restart...");
+                    showStatus("Reconnecting...");
+                    stallCount = 0;
+                    initPlayer();
+                }
+            } else {
+                stallCount = 0;
+                lastTime = video.currentTime;
+            }
+        }, 1000);
+
+        // Initial start
+        initPlayer();
     </script>
 </body>
 </html>
