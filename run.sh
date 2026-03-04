@@ -141,14 +141,6 @@ echo "▶ Starting Caddy..."
         level ERROR
     }
 }
-
-:2511 {
-    tls internal
-    root * .
-    file_server {
-        index redirect.html
-    }
-}
 EOF
 ) &
 
