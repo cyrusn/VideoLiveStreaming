@@ -38,7 +38,7 @@
 </head>
 <body>
     <div id="status">Connecting...</div>
-    <video id="video" controls autoplay playsinline muted></video>
+    <video id="video" controls playsinline></video>
 
     <script>
         const video = document.getElementById('video');
@@ -74,7 +74,12 @@
                 hls.attachMedia(video);
 
                 hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                    video.play().catch(e => console.log("Autoplay blocked/failed", e));
+                    video.muted = false;
+                    video.play().catch(e => {
+                        console.log("Unmuted autoplay blocked, falling back to muted", e);
+                        video.muted = true;
+                        video.play().catch(err => console.log("Muted autoplay also failed", err));
+                    });
                     showStatus("Live");
                 });
 
@@ -101,7 +106,12 @@
                 // Native HLS (Safari/iOS)
                 video.src = streamUrl;
                 video.addEventListener('loadedmetadata', function() {
-                    video.play().catch(e => console.log("Autoplay blocked/failed", e));
+                    video.muted = false;
+                    video.play().catch(e => {
+                        console.log("Unmuted autoplay blocked, falling back to muted", e);
+                        video.muted = true;
+                        video.play().catch(err => console.log("Muted autoplay also failed", err));
+                    });
                     showStatus("Live");
                 });
                 
