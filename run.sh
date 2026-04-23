@@ -133,7 +133,7 @@ echo "▶ Starting Caddy..."
     cd "$BASE_DIR"
     exec caddy run --adapter caddyfile --config - <<EOF
 :${HTTP_PORT} {
-    tls internal
+    # tls internal
     header Access-Control-Allow-Origin *
     root * public
     file_server
